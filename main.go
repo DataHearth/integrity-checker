@@ -26,6 +26,14 @@ var algorithmCommands = map[string][]string{
 
 var verbose bool
 
+// Checker type with all informations
+type Checker struct {
+	filePath  string
+	checkFile string
+	algorithm string
+	checksum  string
+}
+
 func main() {
 	// Setup user input
 	flag.BoolVar(&verbose, "verbose", true, "Should the program be verbose \nDefault: true")
@@ -40,22 +48,24 @@ func main() {
 	// Verifyy if an argument is missing
 	if len(*filePath) == 0 && len(*checkFile) == 0 {
 		log.Println("The file path argument is required...")
+
 		os.Exit(1)
 	}
 
+	checker := Checker{*filePath, *checkFile, *algorithm, *checksum}
 	if len(*checkFile) > 0 {
-		CheckWithFile(*checkFile, *algorithm)
+		checker.CheckWithFile()
 	} else if len(*filePath) > 0 && len(*checksum) > 0 {
-		CheckWithChecksum(*checksum, *filePath, *algorithm)
+		checker.CheckWithChecksum()
 	}
 }
 
 // CheckWithChecksum use a checksum chain and compare it to the result of the choosen algorithm.
 // c is checksum chain, f is the file path, a is the algorithm
-func CheckWithChecksum(c string, f string, a string) {
+func (c Checker) CheckWithChecksum() {
 	var stderr, stdout bytes.Buffer
 
-	cmd := exec.Command(algorithmCommands[a][0], "-a", algorithmCommands[a][1], f)
+	cmd := exec.Command(algorithmCommands[c.algorithm][0], "-a", algorithmCommands[c.algorithm][1], c.filePath)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -63,7 +73,7 @@ func CheckWithChecksum(c string, f string, a string) {
 
 	if stderr.Len() > 0 {
 		// Check if this is a checksum error
-		matched, err := regexp.Match(`(shasum|md5sum): `+ f +`:`, stderr.Bytes())
+		matched, err := regexp.Match(`(shasum|md5sum): `+ c.filePath +`:`, stderr.Bytes())
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -83,7 +93,7 @@ func CheckWithChecksum(c string, f string, a string) {
 		}
 	}
 
-	splittedFilePath := strings.Split(f, "/") // ! Linux File system. Need to add windows in the future
+	splittedFilePath := strings.Split(c.filePath, "/") // ! Linux File system. Need to add windows in the future
 	splittedOutput := strings.Split(stdout.String(), " ")
 
 	if splittedOutput[1] != splittedOutput[len(splittedFilePath)] {
@@ -95,7 +105,7 @@ func CheckWithChecksum(c string, f string, a string) {
 		os.Exit(0)
 	}
 
-	if splittedOutput[0] != c {
+	if splittedOutput[0] != c.checksum {
 		color.Red("Validation error:")
 		fmt.Printf("The checksum provided did not match the sha checksum: \n%s != %s\n", c, splittedOutput[0])
 
@@ -112,17 +122,17 @@ func CheckWithChecksum(c string, f string, a string) {
 
 // CheckWithFile use a checksum file and use the algorithm provided
 // cf is checksum file, a is the algorithm
-func CheckWithFile(cf string, a string) {
+func (c Checker) CheckWithFile() {
 	var stderr, stdout bytes.Buffer
 	var cmd *exec.Cmd
 
 	// execute the validation command with the right algorithm and check file
-	if a == "md5" {
+	if c.algorithm == "md5" {
 		// md5 algorithm
-		cmd = exec.Command(algorithmCommands[a][0], "--check", cf)
+		cmd = exec.Command(algorithmCommands[c.algorithm][0], "--check", c.checkFile)
 	} else {
 		// sha algorithm
-		cmd = exec.Command(algorithmCommands[a][0], "-a", algorithmCommands[a][1], "--check", cf)
+		cmd = exec.Command(algorithmCommands[c.algorithm][0], "-a", algorithmCommands[c.algorithm][1], "--check", c.checkFile)
 	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
