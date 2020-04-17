@@ -13,14 +13,15 @@ import (
 	"github.com/fatih/color"
 )
 
-var algorithmCommands = map[string][]string{
-	"sha1":      {"shasum", "1"},
-	"sha224":    {"shasum", "224"},
-	"sha256":    {"shasum", "256"},
-	"sha384":    {"shasum", "384"},
-	"sha512":    {"shasum", "512"},
-	"sha512224": {"shasum", "512224"},
-	"sha512256": {"shasum", "512256"},
+// AlgorithmCommands are all available algorithms and their associate commands
+var AlgorithmCommands = map[string][]string{
+	"sha1":      {"shasum", "-a", "1"},
+	"sha224":    {"shasum", "-a", "224"},
+	"sha256":    {"shasum", "-a", "256"},
+	"sha384":    {"shasum", "-a", "384"},
+	"sha512":    {"shasum", "-a", "512"},
+	"sha512224": {"shasum", "-a", "512224"},
+	"sha512256": {"shasum", "-a", "512256"},
 	"md5":       {"md5sum"},
 }
 
@@ -64,8 +65,9 @@ func main() {
 // c is checksum chain, f is the file path, a is the algorithm
 func (c Checker) CheckWithChecksum() {
 	var stderr, stdout bytes.Buffer
-
-	cmd := exec.Command(algorithmCommands[c.algorithm][0], "-a", algorithmCommands[c.algorithm][1], c.filePath)
+	algorithmArgs := append(AlgorithmCommands[c.algorithm][1:], c.filePath)
+	
+	cmd := exec.Command(AlgorithmCommands[c.algorithm][0], algorithmArgs...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -124,16 +126,10 @@ func (c Checker) CheckWithChecksum() {
 // cf is checksum file, a is the algorithm
 func (c Checker) CheckWithFile() {
 	var stderr, stdout bytes.Buffer
-	var cmd *exec.Cmd
 
-	// execute the validation command with the right algorithm and check file
-	if c.algorithm == "md5" {
-		// md5 algorithm
-		cmd = exec.Command(algorithmCommands[c.algorithm][0], "--check", c.checkFile)
-	} else {
-		// sha algorithm
-		cmd = exec.Command(algorithmCommands[c.algorithm][0], "-a", algorithmCommands[c.algorithm][1], "--check", c.checkFile)
-	}
+	algorithmArgs := append(AlgorithmCommands[c.algorithm][1:], "--check", c.checkFile)
+
+	cmd := exec.Command(AlgorithmCommands[c.algorithm][0], algorithmArgs...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
