@@ -24,13 +24,11 @@ var algorithmCommands = map[string][]string{
 	"md5":       {"md5sum"},
 }
 
-func main() {
-	// Scope variables
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+var verbose bool
 
+func main() {
 	// Setup user input
-	verbose := flag.Bool("verbose", true, "Should the program be verbose \nDefault: true")
+	flag.BoolVar(&verbose, "verbose", true, "Should the program be verbose \nDefault: true")
 	filePath := flag.String("file", "", "Path the file to check integrity \nRequired")
 	checkFile := flag.String("check", "", "Check file with file reference")
 	algorithm := flag.String("algorithm", "sha256", "Algorithm to use (sha[1, 224, 256, 384, 512, 512224, 512224], md5 NOT RECOMMANDED). \nDefault: sha256")
@@ -46,103 +44,118 @@ func main() {
 	}
 
 	if len(*checkFile) > 0 {
-		var cmd *exec.Cmd
-
-		// execute the validation command with the right algorithm and check file
-		if *algorithm == "md5" {
-			// md5 algorithm
-			cmd = exec.Command(algorithmCommands[*algorithm][0], "--check", *checkFile)
-		} else {
-			// sha algorithm
-			cmd = exec.Command(algorithmCommands[*algorithm][0], "-a", algorithmCommands[*algorithm][1], "--check", *checkFile)
-		}
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-
-		// Run the command
-		cmd.Run()
-
-		if stderr.Len() > 0 {
-			// Check if this is a checksum error
-			matched, err := regexp.Match(`(shasum|md5sum): WARNING: [1-9]{1,9} computed checksum did NOT match`, stderr.Bytes())
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			if matched {
-				color.Red("Validation error:")
-				fmt.Print(stdout.String())
-
-				os.Exit(0)
-			} else {
-				color.Red("Internal error")
-				if *verbose {
-					fmt.Print(stderr.String())
-				}
-
-				os.Exit(0)
-			}
-		}
-
-		color.Green("Validation OK")
-		if *verbose == true {
-			fmt.Print(stdout.String())
-		}
-
-		os.Exit(0)
+		CheckWithFile(*checkFile, *algorithm)
 	} else if len(*filePath) > 0 && len(*checksum) > 0 {
-		cmd := exec.Command(algorithmCommands[*algorithm][0], "-a", algorithmCommands[*algorithm][1], *filePath)
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
+		CheckWithChecksum(*checksum, *filePath, *algorithm)
+	}
+}
 
-		cmd.Run()
+// CheckWithChecksum use a checksum chain and compare it to the result of the choosen algorithm.
+// c is checksum chain, f is the file path, a is the algorithm
+func CheckWithChecksum(c string, f string, a string) {
+	var stderr, stdout bytes.Buffer
 
-		if stderr.Len() > 0 {
-			// Check if this is a checksum error
-			matched, err := regexp.Match(`(shasum|md5sum): `+*filePath+`:`, stderr.Bytes())
-			if err != nil {
-				log.Fatal(err)
-			}
+	cmd := exec.Command(algorithmCommands[a][0], "-a", algorithmCommands[a][1], f)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-			if matched {
-				color.Red("Validation error:")
-				fmt.Print(stdout.String())
+	cmd.Run()
 
-				os.Exit(0)
-			} else {
-				color.Red("Internal error")
-				if *verbose {
-					fmt.Print(stderr.String())
-				}
-
-				os.Exit(0)
-			}
+	if stderr.Len() > 0 {
+		// Check if this is a checksum error
+		matched, err := regexp.Match(`(shasum|md5sum): `+ f +`:`, stderr.Bytes())
+		if err != nil {
+			log.Fatal(err)
 		}
 
-		splittedFilePath := strings.Split(*filePath, "/") // ! Linux File system. Need to add windows in the future
-		splittedOutput := strings.Split(stdout.String(), " ")
-
-		if splittedOutput[1] != splittedOutput[len(splittedFilePath)] {
-			color.Red("Internal error")
-			if *verbose {
-				fmt.Printf("The computed file did not match the file provided")
-			}
-
-			os.Exit(0)
-		}
-
-		if splittedOutput[0] != *checksum {
+		if matched {
 			color.Red("Validation error:")
-			fmt.Printf("The checksum provided did not match the sha checksum: \n%s != %s\n", *checksum, splittedOutput[0])
+			fmt.Print(stdout.String())
+
+			os.Exit(0)
+		} else {
+			color.Red("Internal error")
+			if verbose {
+				fmt.Print(stderr.String())
+			}
 
 			os.Exit(0)
 		}
+	}
 
-		color.Green("Validation OK")
-		if *verbose == true {
-			fmt.Print(stdout.String())
+	splittedFilePath := strings.Split(f, "/") // ! Linux File system. Need to add windows in the future
+	splittedOutput := strings.Split(stdout.String(), " ")
+
+	if splittedOutput[1] != splittedOutput[len(splittedFilePath)] {
+		color.Red("Internal error")
+		if verbose {
+			fmt.Printf("The computed file did not match the file provided")
 		}
 
 		os.Exit(0)
 	}
+
+	if splittedOutput[0] != c {
+		color.Red("Validation error:")
+		fmt.Printf("The checksum provided did not match the sha checksum: \n%s != %s\n", c, splittedOutput[0])
+
+		os.Exit(0)
+	}
+
+	color.Green("Validation OK")
+	if verbose {
+		fmt.Print(stdout.String())
+	}
+
+	os.Exit(0)
+}
+
+// CheckWithFile use a checksum file and use the algorithm provided
+// cf is checksum file, a is the algorithm
+func CheckWithFile(cf string, a string) {
+	var stderr, stdout bytes.Buffer
+	var cmd *exec.Cmd
+
+	// execute the validation command with the right algorithm and check file
+	if a == "md5" {
+		// md5 algorithm
+		cmd = exec.Command(algorithmCommands[a][0], "--check", cf)
+	} else {
+		// sha algorithm
+		cmd = exec.Command(algorithmCommands[a][0], "-a", algorithmCommands[a][1], "--check", cf)
+	}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// Run the command
+	cmd.Run()
+
+	if stderr.Len() > 0 {
+		// Check if this is a checksum error
+		matched, err := regexp.Match(`(shasum|md5sum): WARNING: [1-9]{1,9} computed checksum did NOT match`, stderr.Bytes())
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if matched {
+			color.Red("Validation error:")
+			fmt.Print(stdout.String())
+
+			os.Exit(0)
+		} else {
+			color.Red("Internal error")
+			if verbose {
+				fmt.Print(stderr.String())
+			}
+
+			os.Exit(0)
+		}
+	}
+
+	color.Green("Validation OK")
+	if verbose == true {
+		fmt.Print(stdout.String())
+	}
+
+	os.Exit(0)
 }
