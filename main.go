@@ -2,166 +2,173 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
+	"hash"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
-	"regexp"
 	"strings"
 
 	"github.com/fatih/color"
 )
 
-// AlgorithmCommands are all available algorithms and their associate commands
-var AlgorithmCommands = map[string][]string{
-	"sha1":      {"shasum", "-a", "1"},
-	"sha224":    {"shasum", "-a", "224"},
-	"sha256":    {"shasum", "-a", "256"},
-	"sha384":    {"shasum", "-a", "384"},
-	"sha512":    {"shasum", "-a", "512"},
-	"sha512224": {"shasum", "-a", "512224"},
-	"sha512256": {"shasum", "-a", "512256"},
-	"md5":       {"md5sum"},
+// Algorithms are all available algorithms and their associate commands
+var Algorithms = [8]string{
+	"sha1",
+	"sha224",
+	"sha256",
+	"sha384",
+	"sha512",
+	"sha512224",
+	"sha512256",
+	"md5",
 }
 
-var verbose bool
+// ErrCheckfile zefzef
+var (
+	ErrCheckfile        = errors.New("integrity: please, provive a checkfile or a file and a checksum")
+	ErrUnknownAlgorithm = errors.New("integrity: please, provide a supported algorithm")
+)
 
-// Checker type with all informations
-type Checker struct {
-	filePath  string
-	checkFile string
+// CheckerConfig defines the checker configuration
+type CheckerConfig struct {
+	file      string
 	algorithm string
-	checksum  string
+	checkfile bool
+}
+
+// Checker fezfz
+type Checker struct {
+	verbose bool
+	config  CheckerConfig
 }
 
 func main() {
 	// Setup user input
-	flag.BoolVar(&verbose, "verbose", true, "Should the program be verbose \nDefault: true")
-	filePath := flag.String("file", "", "Path the file to check integrity \nRequired")
-	checkFile := flag.String("check", "", "Check file with file reference")
+	verbose := flag.Bool("verbose", true, "Should the program be verbose \nDefault: true")
+	file := flag.String("file", "", "File to check (could also be a list of file check with related checksum) \nRequired")
+	checkfile := flag.Bool("check", false, "Check file with file reference")
 	algorithm := flag.String("algorithm", "sha256", "Algorithm to use (sha[1, 224, 256, 384, 512, 512224, 512224], md5 NOT RECOMMANDED). \nDefault: sha256")
 	checksum := flag.String("checksum", "", "Checksum for the file")
 
 	// Retrieve user input
 	flag.Parse()
 
-	// Verifyy if an argument is missing
-	if len(*filePath) == 0 && len(*checkFile) == 0 {
+	// Verify if an argument is missing
+	if len(*file) == 0 {
 		log.Println("The file path argument is required...")
 
 		os.Exit(1)
 	}
 
-	checker := Checker{*filePath, *checkFile, *algorithm, *checksum}
-	if len(*checkFile) > 0 {
-		checker.CheckWithFile()
-	} else if len(*filePath) > 0 && len(*checksum) > 0 {
-		checker.CheckWithChecksum()
+	config := CheckerConfig{*file, *algorithm, *checkfile}
+	checker := Checker{*verbose, config}
+
+	// checksum could be equal to "" if config.checkFile is true
+	b, err := checker.isValid(*checksum)
+	if err != nil {
+		color.Red("%v", err)
+	}
+	if b {
+		color.Green("Validation: OK")
+	} else {
+		color.Red("Validation: FAILED")
 	}
 }
 
-// CheckWithChecksum use a checksum chain and compare it to the result of the choosen algorithm.
-// c is checksum chain, f is the file path, a is the algorithm
-func (c Checker) CheckWithChecksum() {
-	var stderr, stdout bytes.Buffer
-	algorithmArgs := append(AlgorithmCommands[c.algorithm][1:], c.filePath)
-	
-	cmd := exec.Command(AlgorithmCommands[c.algorithm][0], algorithmArgs...)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+func (c Checker) isValid(ch string) (bool, error) {
+	var h hash.Hash
 
-	cmd.Run()
+	if !c.config.checkfile && len(ch) == 0 {
+		return false, ErrCheckfile
+	}
 
-	if stderr.Len() > 0 {
-		// Check if this is a checksum error
-		matched, err := regexp.Match(`(shasum|md5sum): `+ c.filePath +`:`, stderr.Bytes())
-		if err != nil {
-			log.Fatal(err)
-		}
+	f, err := os.Open(c.config.file)
+	if err != nil {
+		return false, os.ErrNotExist
+	}
 
-		if matched {
-			color.Red("Validation error:")
-			fmt.Print(stdout.String())
+	defer f.Close()
 
-			os.Exit(0)
-		} else {
-			color.Red("Internal error")
-			if verbose {
-				fmt.Print(stderr.String())
+	switch c.config.algorithm {
+	case Algorithms[0]:
+		h = sha1.New()
+	case Algorithms[1]:
+		h = sha256.New224()
+	case Algorithms[2]:
+		h = sha256.New()
+	case Algorithms[3]:
+		h = sha512.New384()
+	case Algorithms[4]:
+		h = sha512.New()
+	case Algorithms[5]:
+		h = sha512.New512_224()
+	case Algorithms[6]:
+		h = sha512.New512_256()
+	case Algorithms[7]:
+		h = md5.New()
+	default:
+		return false, ErrUnknownAlgorithm
+	}
+
+	if len(ch) == 0 {
+		content := splitCheckfile(f)
+		for _, line := range content {
+			h.Reset()
+
+			lineContent := strings.Split(line, "  ")
+
+			f, err := os.Open(lineContent[1])
+			if err != nil {
+				return false, os.ErrNotExist
 			}
 
-			os.Exit(0)
-		}
-	}
+			_, err = io.Copy(h, f)
+			if err != nil {
+				return false, err
+			}
 
-	splittedFilePath := strings.Split(c.filePath, "/") // ! Linux File system. Need to add windows in the future
-	splittedOutput := strings.Split(stdout.String(), " ")
-
-	if splittedOutput[1] != splittedOutput[len(splittedFilePath)] {
-		color.Red("Internal error")
-		if verbose {
-			fmt.Printf("The computed file did not match the file provided")
+			if !compare(lineContent[0], h) {
+				return false, nil
+			}
 		}
 
-		os.Exit(0)
+		return true, nil
 	}
 
-	if splittedOutput[0] != c.checksum {
-		color.Red("Validation error:")
-		fmt.Printf("The checksum provided did not match the sha checksum: \n%s != %s\n", c, splittedOutput[0])
-
-		os.Exit(0)
+	_, err = io.Copy(h, f)
+	if err != nil {
+		return false, err
 	}
 
-	color.Green("Validation OK")
-	if verbose {
-		fmt.Print(stdout.String())
-	}
-
-	os.Exit(0)
+	return compare(ch, h), nil
 }
 
-// CheckWithFile use a checksum file and use the algorithm provided
-// cf is checksum file, a is the algorithm
-func (c Checker) CheckWithFile() {
-	var stderr, stdout bytes.Buffer
-
-	algorithmArgs := append(AlgorithmCommands[c.algorithm][1:], "--check", c.checkFile)
-
-	cmd := exec.Command(AlgorithmCommands[c.algorithm][0], algorithmArgs...)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	// Run the command
-	cmd.Run()
-
-	if stderr.Len() > 0 {
-		// Check if this is a checksum error
-		matched, err := regexp.Match(`(shasum|md5sum): WARNING: [1-9]{1,9} computed checksum did NOT match`, stderr.Bytes())
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if matched {
-			color.Red("Validation error:")
-			fmt.Print(stdout.String())
-
-			os.Exit(0)
-		} else {
-			color.Red("Internal error")
-			if verbose {
-				fmt.Print(stderr.String())
-			}
-
-			os.Exit(0)
-		}
+func splitCheckfile(f *os.File) []string {
+	d, err := ioutil.ReadAll(f)
+	if err != nil {
+		color.RedString(err.Error())
 	}
 
-	color.Green("Validation OK")
-	if verbose == true {
-		fmt.Print(stdout.String())
+	s := strings.Split(string(d), "\n")
+	trim := s[:len(s)-1]
+
+	return trim
+}
+
+func compare(c string, h hash.Hash) bool {
+	d, err := hex.DecodeString(c)
+	if err != nil {
+		fmt.Println(err)
 	}
 
-	os.Exit(0)
+	return bytes.Equal(d, h.Sum(nil))
 }
