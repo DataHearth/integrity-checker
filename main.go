@@ -131,6 +131,8 @@ func (c Checker) isValid(ch string) (bool, error) {
 				return false, os.ErrNotExist
 			}
 
+			defer f.Close()
+
 			_, err = io.Copy(h, f)
 			if err != nil {
 				return false, err
