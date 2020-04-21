@@ -53,11 +53,11 @@ type Checker struct {
 
 func main() {
 	// Setup user input
-	verbose := flag.Bool("verbose", true, "Should the program be verbose \nDefault: true")
-	file := flag.String("file", "", "File to check (could also be a list of file check with related checksum) \nRequired")
-	checkfile := flag.Bool("check", false, "Check file with file reference")
-	algorithm := flag.String("algorithm", "sha256", "Algorithm to use (sha[1, 224, 256, 384, 512, 512224, 512224], md5 NOT RECOMMANDED). \nDefault: sha256")
-	checksum := flag.String("checksum", "", "Checksum for the file")
+	verbose := flag.Bool("verbose", true, "Should the program be verbose \nDefault: TRUE")
+	file := flag.String("file", "", "Path to your file \nRequired")
+	checkfile := flag.Bool("check", false, "Is the file a \nDefault: FALSE")
+	algorithm := flag.String("algorithm", "sha1", "Supported algorithm (sha[1, 224, 256, 384, 512, 512224, 512224], md5 (NOT RECOMMANDED)). \nDefault: sha1")
+	checksum := flag.String("checksum", "", "File's checksum \nDefault: EMPTY")
 
 	// Retrieve user input
 	flag.Parse()
