@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+integrity-checker
 
 # Test binary, built with `go test -c`
 *.test
