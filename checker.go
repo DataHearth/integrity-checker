@@ -30,42 +30,42 @@ func (c Checker) isValid(ch string) (bool, error) {
 
 	f, err := os.Open(c.config.file)
 	if err != nil {
-		return false, os.ErrNotExist
+		return false, err
 	}
 
 	defer f.Close()
 
-	if len(ch) == 0 {
-		content := utils.SplitCheckfile(f)
-		for _, line := range content {
-			c.config.algorithm.Reset()
-
-			lineContent := strings.Split(line, "  ")
-
-			f, err := os.Open(lineContent[1])
-			if err != nil {
-				return false, os.ErrNotExist
-			}
-
-			defer f.Close()
-
-			_, err = io.Copy(c.config.algorithm, f)
-			if err != nil {
-				return false, err
-			}
-
-			if !utils.Compare(lineContent[0], c.config.algorithm) {
-				return false, nil
-			}
+	if len(ch) > 0 {
+		_, err = io.Copy(c.config.algorithm, f)
+		if err != nil {
+			return false, err
 		}
 
-		return true, nil
+		return utils.Compare(ch, c.config.algorithm), nil
 	}
 
-	_, err = io.Copy(c.config.algorithm, f)
-	if err != nil {
-		return false, err
+	content := utils.SplitCheckfile(f)
+	for _, line := range content {
+		c.config.algorithm.Reset()
+
+		lineContent := strings.Split(line, "  ")
+
+		f, err := os.Open(lineContent[1])
+		if err != nil {
+			return false, err
+		}
+
+		defer f.Close()
+
+		_, err = io.Copy(c.config.algorithm, f)
+		if err != nil {
+			return false, err
+		}
+
+		if !utils.Compare(lineContent[0], c.config.algorithm) {
+			return false, nil
+		}
 	}
 
-	return utils.Compare(ch, c.config.algorithm), nil
+	return true, nil
 }
