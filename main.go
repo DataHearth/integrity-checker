@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"log"
-	"os"
 
 	"github.com/fatih/color"
 )
