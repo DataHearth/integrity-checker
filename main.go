@@ -22,31 +22,36 @@ var Algorithms = [8]string{
 
 var (
 	ErrCheckfile        = errors.New("integrity: please, provive a checkfile or a file and a checksum")
-	ErrUnknownAlgorithm = errors.New("integrity: please, provide a supported algorithm")
-	ErrPathRequired = errors.New("integrity: a file path is required")
+	ErrPathRequired     = errors.New("integrity: a file path is required")
 )
 
 func main() {
+	var verbose bool
+	var checkfile bool
+	var file string
+	var algorithm string
+	var checksum string
+
 	// Setup user input
-	verbose := flag.Bool("verbose", true, "Should the program be verbose \nDefault: TRUE")
-	file := flag.String("file", "", "Path to your file \nRequired")
-	checkfile := flag.Bool("check", true, "Is the file a checkfile\nDefault: FALSE")
-	algorithm := flag.String("algorithm", "sha1", "Supported algorithm (sha[1, 224, 256, 384, 512, 512224, 512224], md5 (NOT RECOMMANDED)). \nDefault: sha1")
-	checksum := flag.String("checksum", "", "File's checksum \nDefault: EMPTY")
+	flag.BoolVar(&verbose, "verbose", true, "Should the program be verbose")
+	flag.StringVar(&file, "file", "", "Path to your file (required)")
+	flag.BoolVar(&checkfile, "check", true, "Is the file a checkfile")
+	flag.StringVar(&algorithm, "algorithm", "sha1", "Supported algorithm (sha[1, 224, 256, 384, 512, 512224, 512224], md5 (NOT RECOMMANDED)).")
+	flag.StringVar(&checksum, "checksum", "", "File's checksum (default empty)")
 
 	// Retrieve user input
 	flag.Parse()
 
 	// Verify if an argument is missing
-	if len(*file) == 0 {
+	if len(file) == 0 {
 		log.Fatalln(ErrPathRequired.Error())
 	}
 
-	config := NewCheckerConfig(*file, *algorithm, *checkfile)
-	checker := NewChecker(config, *verbose)
+	config := NewCheckerConfig(file, algorithm, checkfile)
+	checker := NewChecker(config, verbose)
 
 	// checksum could be equal to "" if config.checkFile is true
-	b, err := checker.isValid(*checksum)
+	b, err := checker.isValid(checksum)
 	if err != nil {
 		color.Red("%v", err)
 	}
