@@ -1,28 +1,12 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"log"
 
+	"github.com/datahearth/integrity-checker/internal/checker"
+	"github.com/datahearth/integrity-checker/internal/utils"
 	"github.com/fatih/color"
-)
-
-// Algorithms are all available algorithms and their associate commands
-var Algorithms = [8]string{
-	"sha1",
-	"sha224",
-	"sha256",
-	"sha384",
-	"sha512",
-	"sha512224",
-	"sha512256",
-	"md5",
-}
-
-var (
-	ErrCheckfile        = errors.New("integrity: please, provive a checkfile or a file and a checksum")
-	ErrPathRequired     = errors.New("integrity: a file path is required")
 )
 
 func main() {
@@ -44,14 +28,13 @@ func main() {
 
 	// Verify if an argument is missing
 	if len(file) == 0 {
-		log.Fatalln(ErrPathRequired.Error())
+		log.Fatalln(utils.ErrPathRequired.Error())
 	}
 
-	config := NewCheckerConfig(file, algorithm, checkfile)
-	checker := NewChecker(config, verbose)
+	checker := checker.NewChecker(file, algorithm, checkfile, verbose)
 
 	// checksum could be equal to "" if config.checkFile is true
-	b, err := checker.isValid(checksum)
+	b, err := checker.IsValid(checksum)
 	if err != nil {
 		color.Red("%v", err)
 	}
