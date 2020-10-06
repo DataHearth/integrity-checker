@@ -16,7 +16,7 @@ HTTPS: `git clone https://github.com/DataHearth/integrity-checker.git`
 SSH: `git@github.com:DataHearth/integrity-checker.git`  
   
 Another solution is to use Go itself:  
-`go get github.com/DataHearth/integrity-checker`
+`go get github.com/datahearth/integrity-checker`
 
 ## Usages
 
