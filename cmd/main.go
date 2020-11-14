@@ -4,8 +4,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/datahearth/integrity-checker/internal/checker"
-	"github.com/datahearth/integrity-checker/internal/utils"
+	"github.com/datahearth/integrity-checker"
+	"github.com/datahearth/integrity-checker/pkg/utils"
 	"github.com/fatih/color"
 )
 
